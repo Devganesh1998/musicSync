@@ -58,20 +58,10 @@ class _MyHomePageState extends State<MyHomePage> {
               labelText: 'Youtube Link',
             ),
             onSubmitted: (String value) async {
-              Video video = await yt.videos.get(value);
-              StreamManifest streamManifest =
-                  await yt.videos.streamsClient.getManifest(video.id);
-              String audioTitle = video.title;
-              AudioOnlyStreamInfo streamInfo =
-                  streamManifest.audioOnly.withHighestBitrate();
-              String audioQuality = streamInfo.qualityLabel;
-              double audioBitrateKbps = streamInfo.bitrate.kiloBitsPerSecond;
-              String audioCodec = streamInfo.audioCodec;
-              String audioMIMEType = streamInfo.codec.type;
-              String audioMIMESubType = streamInfo.codec.subtype;
-              double audioSize = streamInfo.size.totalMegaBytes;
-              String streamUrl = streamInfo.url.toString();
-              var stream = yt.videos.streamsClient.get(streamInfo);
+              final ytUri = Uri.parse(value);
+              final isPlaylist = ytUri.queryParameters.containsKey('list');
+              final playListId = ytUri.queryParameters['list'];
+              final videoId = ytUri.queryParameters['v'];
               // Get folder path from user.
               String? selectedDirectory =
                   await FilePicker.platform.getDirectoryPath();
@@ -80,15 +70,73 @@ class _MyHomePageState extends State<MyHomePage> {
                 // User canceled the picker
                 return;
               }
+              if (isPlaylist) {
+                var playlist = await yt.playlists.get(value);
+                var videos = <Map>[];
 
-              var file =
-                  File("$selectedDirectory/$audioTitle.$audioMIMESubType");
-              var fileStream = file.openWrite();
+                await for (var video in yt.playlists.getVideos(playlist.id)) {
+                  StreamManifest streamManifest =
+                      await yt.videos.streamsClient.getManifest(video.id);
+                  String audioTitle = video.title.replaceAll('/', ' ');
+                  AudioOnlyStreamInfo streamInfo =
+                      streamManifest.audioOnly.withHighestBitrate();
+                  String audioQuality = streamInfo.qualityLabel;
+                  double audioBitrateKbps =
+                      streamInfo.bitrate.kiloBitsPerSecond;
+                  String audioCodec = streamInfo.audioCodec;
+                  String audioMIMEType = streamInfo.codec.type;
+                  String audioMIMESubType = streamInfo.codec.subtype;
+                  double audioSize = streamInfo.size.totalMegaBytes;
+                  String streamUrl = streamInfo.url.toString();
+                  String fileName =
+                      "$selectedDirectory/$audioTitle.$audioMIMESubType";
+                  videos.add({
+                    fileName: fileName,
+                    audioQuality: audioQuality,
+                    audioBitrateKbps: audioBitrateKbps,
+                    audioMIMEType: audioMIMEType,
+                    audioCodec: audioCodec,
+                    audioSize: audioSize,
+                    streamUrl: streamUrl
+                  });
 
-              await stream.pipe(fileStream);
+                  var stream = yt.videos.streamsClient.get(streamInfo);
 
-              await fileStream.flush();
-              await fileStream.close();
+                  var file = File(fileName);
+                  var fileStream = file.openWrite();
+
+                  await stream.pipe(fileStream);
+
+                  await fileStream.flush();
+                  await fileStream.close();
+                  await Future.delayed(const Duration(seconds: 2));
+                }
+                print(videos);
+              } else {
+                Video video = await yt.videos.get(value);
+                StreamManifest streamManifest =
+                    await yt.videos.streamsClient.getManifest(video.id);
+                String audioTitle = video.title.replaceAll('/', ' ');
+                AudioOnlyStreamInfo streamInfo =
+                    streamManifest.audioOnly.withHighestBitrate();
+                String audioQuality = streamInfo.qualityLabel;
+                double audioBitrateKbps = streamInfo.bitrate.kiloBitsPerSecond;
+                String audioCodec = streamInfo.audioCodec;
+                String audioMIMEType = streamInfo.codec.type;
+                String audioMIMESubType = streamInfo.codec.subtype;
+                double audioSize = streamInfo.size.totalMegaBytes;
+                String streamUrl = streamInfo.url.toString();
+                var stream = yt.videos.streamsClient.get(streamInfo);
+
+                var file =
+                    File("$selectedDirectory/$audioTitle.$audioMIMESubType");
+                var fileStream = file.openWrite();
+
+                await stream.pipe(fileStream);
+
+                await fileStream.flush();
+                await fileStream.close();
+              }
 
               await showDialog<void>(
                 context: context,
