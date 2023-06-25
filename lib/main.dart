@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
@@ -57,8 +58,10 @@ class _MyHomePageState extends State<MyHomePage> {
               labelText: 'Youtube Link',
             ),
             onSubmitted: (String value) async {
+              Video video = await yt.videos.get(value);
               StreamManifest streamManifest =
-                  await yt.videos.streamsClient.getManifest("UrUJyKsLQeU");
+                  await yt.videos.streamsClient.getManifest(video.id);
+              String audioTitle = video.title;
               AudioOnlyStreamInfo streamInfo =
                   streamManifest.audioOnly.withHighestBitrate();
               String audioQuality = streamInfo.qualityLabel;
@@ -67,26 +70,32 @@ class _MyHomePageState extends State<MyHomePage> {
               String audioMIMEType = streamInfo.codec.type;
               String audioMIMESubType = streamInfo.codec.subtype;
               double audioSize = streamInfo.size.totalMegaBytes;
-              int audioId = streamInfo.tag;
               String streamUrl = streamInfo.url.toString();
-              if (streamInfo != null) {
-                var stream = yt.videos.streamsClient.get(streamInfo);
+              var stream = yt.videos.streamsClient.get(streamInfo);
+              // Get folder path from user.
+              String? selectedDirectory =
+                  await FilePicker.platform.getDirectoryPath();
 
-                var file = File("$audioId.$audioMIMESubType");
-                var fileStream = file.openWrite();
-
-                await stream.pipe(fileStream);
-
-                await fileStream.flush();
-                await fileStream.close();
+              if (selectedDirectory == null) {
+                // User canceled the picker
+                return;
               }
+
+              var file =
+                  File("$selectedDirectory/$audioTitle.$audioMIMESubType");
+              var fileStream = file.openWrite();
+
+              await stream.pipe(fileStream);
+
+              await fileStream.flush();
+              await fileStream.close();
+
               await showDialog<void>(
                 context: context,
                 builder: (BuildContext context) {
                   return AlertDialog(
                     title: const Text('Checking...'),
-                    content: Text(
-                        'Your youtube Audio meta, $audioQuality, $audioBitrateKbps, $audioCodec, $audioMIMEType, $audioMIMESubType, size - $audioSize, tag - $audioId, url - $streamUrl'),
+                    content: Text('Your youtube Audio meta'),
                     actions: <Widget>[
                       TextButton(
                         onPressed: () {
