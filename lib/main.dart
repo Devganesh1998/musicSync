@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:id3_codec/id3_codec.dart';
+import 'package:music_sync/utils.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 var yt = YoutubeExplode();
@@ -58,10 +60,6 @@ class _MyHomePageState extends State<MyHomePage> {
               labelText: 'Youtube Link',
             ),
             onSubmitted: (String value) async {
-              final ytUri = Uri.parse(value);
-              final isPlaylist = ytUri.queryParameters.containsKey('list');
-              final playListId = ytUri.queryParameters['list'];
-              final videoId = ytUri.queryParameters['v'];
               // Get folder path from user.
               String? selectedDirectory =
                   await FilePicker.platform.getDirectoryPath();
@@ -70,6 +68,12 @@ class _MyHomePageState extends State<MyHomePage> {
                 // User canceled the picker
                 return;
               }
+
+              final ytUri = Uri.parse(value);
+              final isPlaylist = ytUri.queryParameters.containsKey('list');
+              final playListId = ytUri.queryParameters['list'];
+              final videoId = ytUri.queryParameters['v'];
+
               if (isPlaylist) {
                 var playlist = await yt.playlists.get(value);
                 var videos = <Map>[];
@@ -110,6 +114,10 @@ class _MyHomePageState extends State<MyHomePage> {
                   await fileStream.flush();
                   await fileStream.close();
                   await Future.delayed(const Duration(seconds: 2));
+                  await updateAudioID3MetaData(
+                      file.path,
+                      MetadataV1Body(
+                          comment: {"videoId": video.id, "playListId": playlist.id}.toString(), title: video.title, artist: video.author, album: playlist.title));
                 }
                 print(videos);
               } else {
@@ -136,6 +144,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
                 await fileStream.flush();
                 await fileStream.close();
+                await updateAudioID3MetaData(file.path,
+                    MetadataV1Body(comment: {"videoId": video.id}.toString(), title: video.title, artist: video.author));
               }
 
               await showDialog<void>(
