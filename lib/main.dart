@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:id3_codec/id3_codec.dart';
 import 'package:music_sync/utils.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 var yt = YoutubeExplode();
@@ -38,6 +39,8 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  SharedPreferences? sharedPref;
+
   @override
   void dispose() {
     yt.close();
@@ -60,13 +63,20 @@ class _MyHomePageState extends State<MyHomePage> {
               labelText: 'Youtube Link',
             ),
             onSubmitted: (String value) async {
-              // Get folder path from user.
-              String? selectedDirectory =
-                  await FilePicker.platform.getDirectoryPath();
+              sharedPref ??= await SharedPreferences.getInstance();
+              String? downloadPath =
+                  sharedPref?.getString('MUSIC_SYNC:DOWNLOAD_ROOT_PATH');
+              if (downloadPath == null) {
+                // Get folder path from user.
+                String? selectedDirectory =
+                    await FilePicker.platform.getDirectoryPath();
 
-              if (selectedDirectory == null) {
-                // User canceled the picker
-                return;
+                if (selectedDirectory == null) {
+                  // User canceled the picker
+                  return;
+                }
+                await sharedPref?.setString('MUSIC_SYNC:DOWNLOAD_ROOT_PATH', selectedDirectory);
+                downloadPath = selectedDirectory;
               }
 
               final ytUri = Uri.parse(value);
@@ -93,7 +103,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   double audioSize = streamInfo.size.totalMegaBytes;
                   String streamUrl = streamInfo.url.toString();
                   String fileName =
-                      "$selectedDirectory/$audioTitle.$audioMIMESubType";
+                      "$downloadPath/$audioTitle.$audioMIMESubType";
                   videos.add({
                     fileName: fileName,
                     audioQuality: audioQuality,
@@ -117,7 +127,13 @@ class _MyHomePageState extends State<MyHomePage> {
                   await updateAudioID3MetaData(
                       file.path,
                       MetadataV1Body(
-                          comment: {"videoId": video.id, "playListId": playlist.id}.toString(), title: video.title, artist: video.author, album: playlist.title));
+                          comment: {
+                            "videoId": video.id,
+                            "playListId": playlist.id
+                          }.toString(),
+                          title: video.title,
+                          artist: video.author,
+                          album: playlist.title));
                 }
                 print(videos);
               } else {
@@ -137,15 +153,19 @@ class _MyHomePageState extends State<MyHomePage> {
                 var stream = yt.videos.streamsClient.get(streamInfo);
 
                 var file =
-                    File("$selectedDirectory/$audioTitle.$audioMIMESubType");
+                    File("$downloadPath/$audioTitle.$audioMIMESubType");
                 var fileStream = file.openWrite();
 
                 await stream.pipe(fileStream);
 
                 await fileStream.flush();
                 await fileStream.close();
-                await updateAudioID3MetaData(file.path,
-                    MetadataV1Body(comment: {"videoId": video.id}.toString(), title: video.title, artist: video.author));
+                await updateAudioID3MetaData(
+                    file.path,
+                    MetadataV1Body(
+                        comment: {"videoId": video.id}.toString(),
+                        title: video.title,
+                        artist: video.author));
               }
 
               await showDialog<void>(
